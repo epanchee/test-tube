@@ -1,7 +1,8 @@
 use cosmrs::proto::cosmwasm::wasm::v1::{
     AccessConfig, MsgExecuteContract, MsgExecuteContractResponse, MsgInstantiateContract,
     MsgInstantiateContractResponse, MsgStoreCode, MsgStoreCodeResponse,
-    QuerySmartContractStateRequest, QuerySmartContractStateResponse,
+    QueryRawContractStateRequest, QueryRawContractStateResponse, QuerySmartContractStateRequest,
+    QuerySmartContractStateResponse,
 };
 use cosmwasm_std::Coin;
 use serde::{de::DeserializeOwned, Serialize};
@@ -116,6 +117,25 @@ where
                 &QuerySmartContractStateRequest {
                     address: contract.to_owned(),
                     query_data: serde_json::to_vec(msg).map_err(EncodeError::JsonEncodeError)?,
+                },
+            )?;
+
+        serde_json::from_slice(&res.data)
+            .map_err(DecodeError::JsonDecodeError)
+            .map_err(RunnerError::DecodeError)
+    }
+
+    pub fn query_raw<Res>(&self, contract: &str, msg: &[u8]) -> RunnerResult<Res>
+    where
+        Res: ?Sized + DeserializeOwned,
+    {
+        let res = self
+            .runner
+            .query::<QueryRawContractStateRequest, QueryRawContractStateResponse>(
+                "/cosmwasm.wasm.v1.Query/RawContractState",
+                &QueryRawContractStateRequest {
+                    address: contract.to_owned(),
+                    query_data: msg.to_vec(),
                 },
             )?;
 

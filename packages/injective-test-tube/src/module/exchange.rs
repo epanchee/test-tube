@@ -1,4 +1,7 @@
 use injective_std::types::injective::exchange::v1beta1;
+use injective_std::types::injective::exchange::v1beta1::{
+    MsgCreateSpotMarketOrder, MsgCreateSpotMarketOrderResponse,
+};
 use test_tube::module::Module;
 use test_tube::runner::Runner;
 use test_tube::{fn_execute, fn_query};
@@ -83,6 +86,10 @@ where
 
     fn_query! {
         pub query_exchange_module_state ["/injective.exchange.v1beta1.Query/ModuleStateRequest"]: v1beta1::QueryModuleStateRequest => v1beta1::QueryModuleStateResponse
+    }
+
+    fn_execute! {
+        pub create_spot_market_order: MsgCreateSpotMarketOrder => MsgCreateSpotMarketOrderResponse
     }
 }
 
