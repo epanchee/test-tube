@@ -2,6 +2,8 @@
 
 CosmWasm x Injective integration testing library that, unlike `cw-multi-test`, it allows you to test your cosmwasm contract against real chain's logic instead of mocks.
 
+As the project depends on currently private repos, no crate is published rather please refer to [`CHANGELOG`](./CHANGELOG.md) for features and update information.
+
 ## Table of Contents
 
 - [Getting Started](#getting-started)
@@ -251,7 +253,7 @@ use injective_std::types::injective::exchange::v1beta1::{
     QuerySpotMarketsRequest, QuerySpotMarketsResponse, SpotMarket,
 };
 use injective_test_tube::{Account, Exchange, InjectiveTestApp};
-use test_tube::Module;
+use test_tube_inj::Module;
 
 let app = InjectiveTestApp::new();
 let signer = app
@@ -301,6 +303,7 @@ app.increase_time(1u64);
 let spot_markets = exchange
     .query_spot_markets(&QuerySpotMarketsRequest {
         status: "Active".to_owned(),
+        market_ids: vec![],
     })
     .unwrap();
 
