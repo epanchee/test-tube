@@ -5,7 +5,7 @@ use cosmwasm_std::Coin;
 use prost::Message;
 use test_tube_inj::account::SigningAccount;
 
-use test_tube_inj::runner::result::{RunnerExecuteResult, RunnerResult};
+use test_tube_inj::runner::result::{RunnerExecuteResult, RunnerExecuteResultMult, RunnerResult};
 use test_tube_inj::runner::Runner;
 use test_tube_inj::BaseApp;
 
@@ -113,6 +113,10 @@ impl InjectiveTestApp {
     ) -> RunnerResult<P> {
         self.inner.get_param_set(subspace, type_url)
     }
+
+    pub fn enable_increasing_block_time_in_end_blocker(&self) {
+        self.inner.enable_increasing_block_time_in_end_blocker()
+    }
 }
 
 impl<'a> Runner<'a> for InjectiveTestApp {
@@ -126,6 +130,17 @@ impl<'a> Runner<'a> for InjectiveTestApp {
         R: ::prost::Message + Default,
     {
         self.inner.execute_multiple(msgs, signer)
+    }
+
+    fn execute_single_block<M, R>(
+        &self,
+        msgs: &[(M, &str, &SigningAccount)],
+    ) -> RunnerExecuteResultMult<R>
+    where
+        M: ::prost::Message,
+        R: ::prost::Message + Default,
+    {
+        self.inner.execute_single_block(msgs)
     }
 
     fn query<Q, R>(&self, path: &str, q: &Q) -> RunnerResult<R>
@@ -154,11 +169,12 @@ mod tests {
     use injective_std::types::{
         cosmos::bank::v1beta1::QueryAllBalancesRequest,
         injective::tokenfactory::v1beta1::{
-            MsgCreateDenom, MsgCreateDenomResponse, QueryParamsRequest, QueryParamsResponse,
+            MsgCreateDenom, MsgCreateDenomResponse, QueryDenomsFromCreatorRequest,
+            QueryParamsRequest, QueryParamsResponse,
         },
     };
 
-    use crate::module::Wasm;
+    use crate::module::{TokenFactory, Wasm};
     use crate::runner::app::InjectiveTestApp;
     use crate::Bank;
     use test_tube_inj::account::{Account, FeeSetting};
@@ -270,6 +286,69 @@ mod tests {
             .unwrap();
 
         assert_eq!(app.get_block_height(), 5i64);
+
+        let acc_2 = app
+            .init_account(&coins(100_000_000_000_000_000_000u128, "inj")) // 100 inj
+            .unwrap();
+        assert_eq!(app.get_block_height(), 6i64);
+
+        // execute on more time to excercise account sequence
+        let msg = MsgCreateDenom {
+            sender: acc.address(),
+            subdenom: "multidenom_3".to_string(),
+        };
+
+        let msg_2 = MsgCreateDenom {
+            sender: acc.address(),
+            subdenom: "multidenom_4".to_string(),
+        };
+
+        let msg_3 = MsgCreateDenom {
+            sender: acc_2.address(),
+            subdenom: "multidenom_5".to_string(),
+        };
+
+        let res: Vec<ExecuteResponse<MsgCreateDenomResponse>> = app
+            .execute_single_block(&[
+                (msg, "/injective.tokenfactory.v1beta1.MsgCreateDenom", &acc),
+                (
+                    msg_2,
+                    "/injective.tokenfactory.v1beta1.MsgCreateDenom",
+                    &acc,
+                ),
+                (
+                    msg_3,
+                    "/injective.tokenfactory.v1beta1.MsgCreateDenom",
+                    &acc_2,
+                ),
+            ])
+            .unwrap();
+
+        assert_eq!(res.len(), 3);
+
+        assert_eq!(app.get_block_height(), 7i64);
+
+        let tokenfactory = TokenFactory::new(&app);
+
+        // Ensure denoms are created by acc
+        let denoms = tokenfactory
+            .query_denoms_from_creator(&QueryDenomsFromCreatorRequest {
+                creator: acc.address(),
+            })
+            .unwrap()
+            .denoms;
+
+        assert_eq!(denoms.len(), 6);
+
+        // Ensure denoms are created by acc_2
+        let denoms = tokenfactory
+            .query_denoms_from_creator(&QueryDenomsFromCreatorRequest {
+                creator: acc_2.address(),
+            })
+            .unwrap()
+            .denoms;
+
+        assert_eq!(denoms.len(), 1);
     }
 
     #[test]
@@ -328,7 +407,7 @@ mod tests {
                     mutable: true,
                 },
                 Some(&admin.address()),
-                None,
+                Some("Test label"),
                 &[],
                 admin,
             )
